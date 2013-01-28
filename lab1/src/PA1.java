@@ -47,9 +47,6 @@ import javax.swing.JFrame;
 
 import sun.java2d.opengl.GLXGraphicsConfig;
 
-import jogamp.opengl.x11.*;
-import jogamp.opengl.x11.glx.GLX;
-
 import com.jogamp.opengl.util.FPSAnimator;//for new version of gl
 import com.jogamp.opengl.util.gl2.GLUT;//for new version of gl
 
@@ -126,7 +123,7 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
   private PA1() {
     // enables double buffering
     this.capabilities.setDoubleBuffered(true);
-//    this.capabilities.setStencilBits(8);
+    this.capabilities.setStencilBits(8);
     
     this.canvas = new GLCanvas(this.capabilities);
     this.canvas.addGLEventListener(this);
@@ -174,11 +171,7 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
 
     // clear the display
     gl.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_STENCIL_BUFFER_BIT);
-//    gl.glClearStencil(0);
-//    
-//    gl.glStencilFunc(GL.GL_NEVER, 0x0, 0x0);
-//    gl.glStencilOp(GL.GL_INCR, GL.GL_INCR, GL.GL_INCR);
-
+    
     // check if we need to highlight pixels which are inside the polygon
     if (this.insideOutsideTest) {
       // push the current color

@@ -47,6 +47,37 @@ public class Polygon extends Shape{
 ////////////////////////////////////////////////////////////////
   
   /**
+   * 
+   * @return {@code true} if and only if polygon vertices are counterclockwise
+   */
+  public boolean isCounterClockwise()
+  {
+	/* This test uses a simplified version of green's theorem to get the signed area
+	 * if the result is positive, curve is clockwise, else it is counter clockwise  
+	 */
+	  float sum = 0;
+	  Point p1, p2;
+	  int size = this.vertices.size();
+	  for ( int ii = 0 ; ii < (size - 1) ; ii++ )
+	  {
+		  p1 = this.vertices.get(ii); 
+		  p2 = this.vertices.get(ii+1);
+		  sum += (p2.x - p1.x)*(p2.y + p1.y);
+	  }
+	  /* Add in the final edge */
+	  sum += (this.vertices.get(0).x - this.vertices.get(size-1).x) * (this.vertices.get(0).y + this.vertices.get(size-1).y);
+	  
+	  /* Since the opengl coordinate system starts from top left, with +y going down, I invert the if statement to be consistent with
+	   * the way the polygons will appear to the user (a typical counterclockwise in standard coordinates will look clockwise here)
+	   */
+	  
+	  if (sum < 0)
+		  return false;
+	  else
+		  return true;
+  }
+  
+  /**
    * Returns {@code true} if and only if this polygon overlaps Circle c.
    * 
    * @param c
@@ -70,9 +101,59 @@ public class Polygon extends Shape{
    * @return {@code true} if and only if this polygon is concave.
    */
   public boolean isConcave() {
-	  /*
-	   * For now this always returns false. You should implement this method.
+	  /* Calculate by finding sign of z component of cross product.  The sign of this,
+	   * along with the knowledge of whether the polygon is drawn clockwise or counter-
+	   * determines the concavity
 	   */
+	  Point p1, p2, p3;
+	  float zCross;
+	  boolean isCounterClockwise = isCounterClockwise();
+	  int size = vertices.size();
+	  
+	  if (size < 3)
+	  {
+		  return false; /* Not yet a polygon */
+	  }
+	  
+	  for (int ii = 0 ; ii < vertices.size() ; ii++)
+	  {
+		  if (ii == (size - 1))
+		  {
+			  /* Special case, angle that uses mid as center point */
+			  p1 = vertices.get(ii);
+			  p2 = vertices.get(0);
+			  p3 = vertices.get(1);
+		  }
+		  else if (ii == (size -2))
+		  {
+			  /* Special case, angle that uses mid as last point */
+			  p1 = vertices.get(ii);
+			  p2 = vertices.get(ii+1);
+			  p3 = vertices.get(0);
+		  }
+		  else
+		  {
+			  /* Base case */
+			  p1 = vertices.get(ii);
+			  p2 = vertices.get(ii+1);
+			  p3 = vertices.get(ii+2);
+		  }
+		  
+		  /* Get magnitudes */
+		  zCross = (p2.x - p1.x)*(p3.y - p2.y) - (p2.y - p1.y)*(p3.x - p2.x);
+		  if (isCounterClockwise)
+		  {
+			  /* I invert to stay consistent with direction, and the opengl coordinate system */
+			  zCross *= -1;
+		  }
+		  
+		  if (zCross < 0)
+		  {
+			  return true;
+		  }
+	  }
+	  
+	  
 	  return false;
   }
 
@@ -88,11 +169,20 @@ public class Polygon extends Shape{
    *         polygon.
    */
   public boolean isInside(final float x, final float y) {
-	  /*
-	   * For now, this method always returns false. Remove this line when you
-	   * implement your own algorithm.
+	  /* First detect if point is even in the bounding box */
+	  if (x > this.bbox.getMaxX() || x < this.bbox.getMinX() ||
+			  y > this.bbox.getMaxY() || y < this.bbox.getMinY())
+		  return false;
+	  
+	  /* Next pick a point outside the polygon and verify the ray from the out point to this
+	   * point does not cross any vertices, otherwise select a new line
 	   */
-	  return false;
+	  Point outer = new Point(this.bbox.getMaxX() + 1, this.bbox.getMaxY() + 1);
+//	  while (true)
+//	  {
+//		  
+//	  }
+	  return true;
   }
 
   /**
