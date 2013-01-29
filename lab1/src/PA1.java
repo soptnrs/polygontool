@@ -177,7 +177,7 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
       // push the current color
       gl.glPushAttrib(GL2.GL_CURRENT_BIT);
       gl.glPointSize(3);
-      gl.glBegin(GL.GL_POINTS);
+      gl.glBegin(GL.GL_POINTS);   
       for (int y = 0; y < this.canvas.getHeight(); y++) {
         for (int x = 0; x < this.canvas.getWidth(); x++) {
           if (this.shapes[selectedShapeIndex].isInside(x, y))
