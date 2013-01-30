@@ -72,13 +72,70 @@ private static void drawConcave(final GLAutoDrawable drawable,
 	 * The next line is only here until you implement your own algorithm for drawing
 	 * a concave polygon. Comment out this line once you have implemented it!
 	 */
-	drawConvex(drawable,polygon,color);  
+	// drawConvex(drawable,polygon,color);  
 	/*
 	 * Your code for drawing a concave polygon, using the openGL stencil buffer should go here.
 	 */
+	if (polygon.vertices().isEmpty())
+		return;
+
+	final GL2 gl = (GL2) drawable.getGL();
 	
+	/* Set up stencil buffer */
+	gl.glClearStencil(0);
+	gl.glEnable(GL.GL_STENCIL_TEST);
+	gl.glColorMask(false, false, false, false);
+	gl.glStencilFunc(GL.GL_NEVER, 0, 1);
+	gl.glStencilOp(GL.GL_INVERT, GL.GL_INVERT, GL.GL_INVERT);
 	
+	// if only 1 vertex, draw a point
+	if (polygon.vertices().size() == 1)
+		gl.glBegin(GL.GL_POINTS);
+
+	// if only 2 vertices, draw a line
+	else if (polygon.vertices().size() == 2)
+		gl.glBegin(GL.GL_LINES);
+
+	// otherwise draw a polygon
+	else
+		gl.glBegin(GL2.GL_TRIANGLE_FAN); /* For best performance here */
+
+	for (final Point vertex : polygon.vertices())
+		gl.glVertex2f(vertex.x, vertex.y);
+
+	gl.glEnd();
 	
+	/* Re-enable color */
+	gl.glColorMask(true, true, true, true);
+	gl.glStencilFunc(GL.GL_EQUAL, 1, 1);
+	gl.glStencilOp(GL.GL_ZERO, GL.GL_ZERO, GL.GL_ZERO);
+	
+	// push the current color
+	gl.glPushAttrib(GL2.GL_CURRENT_BIT);
+
+	// use the current polygon's color
+	gl.glColor3f(color.getRed(), color.getGreen(), color.getBlue());
+
+	// if only 1 vertex, draw a point
+	if (polygon.vertices().size() == 1)
+		gl.glBegin(GL.GL_POINTS);
+
+	// if only 2 vertices, draw a line
+	else if (polygon.vertices().size() == 2)
+		gl.glBegin(GL.GL_LINES);
+
+	// otherwise draw a polygon
+	else
+		gl.glBegin(GL2.GL_POLYGON);
+
+	for (final Point vertex : polygon.vertices())
+		gl.glVertex2f(vertex.x, vertex.y);
+
+	gl.glEnd();
+
+	// pop current color
+	gl.glPopAttrib();
+	gl.glDisable(GL.GL_STENCIL_TEST);
 }
 
 ////////////////////////////////////////////////////////////////

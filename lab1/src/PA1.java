@@ -45,8 +45,6 @@ import javax.media.opengl.GLEventListener;
 import javax.media.opengl.glu.GLU;
 import javax.swing.JFrame;
 
-import sun.java2d.opengl.GLXGraphicsConfig;
-
 import com.jogamp.opengl.util.FPSAnimator;//for new version of gl
 import com.jogamp.opengl.util.gl2.GLUT;//for new version of gl
 
@@ -68,6 +66,8 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
   private static final int POLY_MODE=0;
   private static final int CIRC_MODE=1;
   private static final int INSI_MODE=2;
+  /** Added in hole mode */
+  private static final int HOLE_MODE=3;
 
   /**
    * Initializes the window and OpenGL components, then runs the animator.
@@ -223,6 +223,14 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
         else
         	drawString(drawable, 20, this.canvas.getHeight() - 40,
     				"The polygon does NOT have self-intersection", GLUT.BITMAP_HELVETICA_18);
+        
+        /* Display the result of Clockwise TEST */
+        if (!((Polygon)this.shapes[0]).isClockwise())
+        	drawString(drawable, this.canvas.getWidth()-60, this.canvas.getHeight() - 80,
+    				"CW", GLUT.BITMAP_HELVETICA_18);
+        else
+        	drawString(drawable, this.canvas.getWidth()-60, this.canvas.getHeight() - 80,
+    				"CCW", GLUT.BITMAP_HELVETICA_18);
     }
     
     
@@ -374,6 +382,9 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
     case 'i':
       this.mode = INSI_MODE;
       
+    case 'H':
+    case 'h':
+    	this.mode = HOLE_MODE;
 
     default:
       break;
@@ -494,6 +505,8 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
         else
             this.insideOutsideMessage = "Point is OUTSIDE the polygon";
     	break;
+    case HOLE_MODE:
+    	
     default:
     	break;
     }
