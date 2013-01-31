@@ -324,16 +324,26 @@ public class Polygon extends Shape
         {
         	/* Get a new point */
         	outer.x = rand.nextFloat() + 10 + this.bbox.getMaxX();
-        	outer.y = rand.nextFloat() + 10 + this.bbox.getMaxY();
+        	outer.y = rand.nextFloat() + 20 + this.bbox.getMaxY();
         	
-        	float m = (outer.y - thePoint.y) / (outer.x - thePoint.x); /* Slope of ray from point to outer point */
-        	float b = (thePoint.y - m * thePoint.x); /* Intercept */
+        	/* Set up the two vectors */
+        	float rayX = outer.x - thePoint.x;
+        	float rayY = outer.y - thePoint.y;
+        	float testX, testY, intersectTest;
         	
         	for (Point p : this.vertices)
         	{
         		/* Check if any vertex lies on line from point */
-        		float potentialY = p.x * m + b;
-        		if (potentialY >= (p.y - 2e-05) && potentialY <= (p.y + 2e-05))
+        		testX = p.x - thePoint.x;
+        		testY = p.y - thePoint.y;
+        		float magRay = (float) Math.sqrt( Math.pow((double)rayX, 2) + Math.pow((double)rayY, 2));
+        		float magTest = (float) Math.sqrt( Math.pow((double)testX, 2) + Math.pow((double)testY, 2));
+
+        		//System.out.println("The mag multiply for " + p.toString() + " is " + magTest * magRay);
+				intersectTest = Math.abs(1 - (Math.abs(rayX * testX + rayY
+							* testY)));// / (magRay * magTest)));
+
+				if (intersectTest <= 1e-005)
         		{
         			/* This is on the line */
         			notValid = true;
