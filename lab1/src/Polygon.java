@@ -18,10 +18,17 @@ import java.util.Random;
 /**
  * A polygon with additional drawing capabilities.
  *
+ * NOTE: For the polygon with hole expansion, I assume a few key features.  I assume that a
+ * hole will never have vertices outside the polygon boundary.  I assume that there will be
+ * no holes within holes for the polygon.  And I enforce the condition that once you create
+ * a new hole, you can no longer edit any previous holes. I also assume that you can only move
+ * boundary vertices, since it is in a separate mode
+ *
  * @author Stan Sclaroff <sclaroff>
  * @author Tai-Peng Tian <tiantp@gmail.com>
  * @author Jeffrey Finkelstein <jeffreyf>
  * @author Jianming Zhang
+ * @author Raphael Landaverde
  */
 public class Polygon extends Shape
 {
@@ -36,6 +43,8 @@ public class Polygon extends Shape
     private float TOL = 0.0005f;
     /** An list of lists of vertices for holes */
     private final ArrayList<ArrayList<Point>> holes = new ArrayList<ArrayList<Point>>();
+    /** Current index into the hole array */
+    private int holeIndex = -1;
 
     public Polygon()
     {
@@ -51,61 +60,61 @@ public class Polygon extends Shape
     ////////////////////////////////////////////////////////////////
     //  IMPLEMENT THE FUNCTIONS BELOW                     //////////
     ////////////////////////////////////////////////////////////////
-    
+
     /**
-     * 
-     * @param p1	The start of line segment
-     * @param p2	The end of line segment
-     * @param c1	The center of circle
-     * @param radius	The radius of the circle
+     *
+     * @param p1    The start of line segment
+     * @param p2    The end of line segment
+     * @param c1    The center of circle
+     * @param radius    The radius of the circle
      * @return {@code true} if and only if the circle is intersecting the polygon
      */
     public boolean circleTouching(Point p1, Point p2, Point c1, float radius)
     {
-    	Point closest;
-    	Point edgeVec = new Point(p2.x - p1.x, p2.y - p1.y); /* Vector representing edge p1-p2 */
-    	Point toCenter = new Point(c1.x - p1.x, c1.y - p1.y); /* Vector from p1 to circle center */
-    	
-    	float magnitude = (float)Math.sqrt( Math.pow((double)edgeVec.x, 2) + 
-    			Math.pow((double)edgeVec.y, 2) );
-    	Point unitVector = new Point(edgeVec.x / magnitude, edgeVec.y / magnitude);
-    	
-    	/* Project of vector to center in the direction of edge (dot product) */
-    	float projection = toCenter.x * unitVector.x + toCenter.y * unitVector.y;
-    	
-    	/* Now, edge cases.  If projection is greater than magnitude of edgeVec, it is past the
-    	 * end of the vector, if it is < 0, it is before the vector.  In this case, the closest
-    	 * point is the vertices themselves.
-    	 */
-    	if (projection <= 1e-005)
-    	{
-    		closest = p1;
-    	}
-    	else if (projection >= magnitude-1e-005)
-    	{
-    		closest = p2;
-    	}
-    	else
-    	{
-    		Point projectionVector = new Point(unitVector.x * projection, unitVector.y * projection);
-    		closest = new Point(p1.x + projectionVector.x, p1.y + projectionVector.y);
-    	}
-    	
-    	/* Now we have the closest point, so we take this closest point, and get the distance to the center */
-    	float xDist = c1.x - closest.x;
-    	float yDist = c1.y - closest.y;
-    	float distance = (float) Math.sqrt(Math.pow((double)xDist, 2) + Math.pow((double)yDist, 2));
-    	if (distance <= radius)
-    		return true;
-    	else 
-    		return false;
+        Point closest;
+        Point edgeVec = new Point(p2.x - p1.x, p2.y - p1.y); /* Vector representing edge p1-p2 */
+        Point toCenter = new Point(c1.x - p1.x, c1.y - p1.y); /* Vector from p1 to circle center */
+
+        float magnitude = (float)Math.sqrt( Math.pow((double)edgeVec.x, 2) +
+                                            Math.pow((double)edgeVec.y, 2) );
+        Point unitVector = new Point(edgeVec.x / magnitude, edgeVec.y / magnitude);
+
+        /* Project of vector to center in the direction of edge (dot product) */
+        float projection = toCenter.x * unitVector.x + toCenter.y * unitVector.y;
+
+        /* Now, edge cases.  If projection is greater than magnitude of edgeVec, it is past the
+         * end of the vector, if it is < 0, it is before the vector.  In this case, the closest
+         * point is the vertices themselves.
+         */
+        if (projection <= 1e-005)
+        {
+            closest = p1;
+        }
+        else if (projection >= magnitude - 1e-005)
+        {
+            closest = p2;
+        }
+        else
+        {
+            Point projectionVector = new Point(unitVector.x * projection, unitVector.y * projection);
+            closest = new Point(p1.x + projectionVector.x, p1.y + projectionVector.y);
+        }
+
+        /* Now we have the closest point, so we take this closest point, and get the distance to the center */
+        float xDist = c1.x - closest.x;
+        float yDist = c1.y - closest.y;
+        float distance = (float) Math.sqrt(Math.pow((double)xDist, 2) + Math.pow((double)yDist, 2));
+        if (distance <= radius)
+            return true;
+        else
+            return false;
     }
 
     /**
      *
      * @return {@code true} if and only if polygon vertices are counterclockwise
      */
-    public boolean isClockwise()
+    public boolean isClockwise(ArrayList<Point> theVertices)
     {
         /* This test uses a simplified version of green's theorem to get the signed area
          * if the result is positive, curve is clockwise, else it is counter clockwise, I got the idea from:
@@ -113,19 +122,19 @@ public class Polygon extends Shape
          */
         float sum = 0;
         Point p1, p2;
-        int size = this.vertices.size();
-        
+        int size = theVertices.size();
+
         if (size == 0)
-        	return false;
-        
+            return false;
+
         for ( int ii = 0 ; ii < (size - 1) ; ii++ )
         {
-            p1 = this.vertices.get(ii);
-            p2 = this.vertices.get(ii + 1);
+            p1 = theVertices.get(ii);
+            p2 = theVertices.get(ii + 1);
             sum += (p2.x - p1.x) * (p2.y + p1.y);
         }
         /* Add in the final edge */
-        sum += (this.vertices.get(0).x - this.vertices.get(size - 1).x) * (this.vertices.get(0).y + this.vertices.get(size - 1).y);
+        sum += (theVertices.get(0).x - theVertices.get(size - 1).x) * (theVertices.get(0).y + theVertices.get(size - 1).y);
 
         /* Since the opengl coordinate system starts from top left, with +y going down, I invert the if statement to be consistent with
          * the way the polygons will appear to the user (a typical counterclockwise in standard coordinates will look clockwise here)
@@ -146,37 +155,37 @@ public class Polygon extends Shape
          * (xp - xl) * dyl - (yp - yl) * dxl = (dyp*dxl - dxp*dyl) t
          * t is the point of intersection on the p ray, then check s as well
          */
-    	float a = (p.x - q.x) * dqy - (p.y - q.y) * dqx; 
-    	float b = dpy * dqx - dpx * dqy;
-    	float t = a / b;
-    	/* I use greater than 0 simply because i do not want a vertex to count as an intersect */
-    	if (t >= -1e-005 && t <= (1 - 1e-005))
-    	{
-    		float s;
-    		/* Must account for vertical or horizontal line segments */
-    		if (dqx != 0)
-    		{
-    			s = ( ( p.x - q.x) + dpx * t ) / dqx;
-    		}
-    		else
-    		{
-    			s = ( ( p.y - q.y) + dpy * t) / dqy;
-    		}
-    		
-    		if (s > 0 && s < 1)
-    		{
-    			return true;
-    		}
-    		else
-    		{
-    			return false;
-    		}
-    		
-    	}
-		else
-		{
-			return false;
-		}
+        float a = (p.x - q.x) * dqy - (p.y - q.y) * dqx;
+        float b = dpy * dqx - dpx * dqy;
+        float t = a / b;
+        /* I use greater than 0 simply because i do not want a vertex to count as an intersect */
+        if (t >= -1e-005 && t <= (1 - 1e-005))
+        {
+            float s;
+            /* Must account for vertical or horizontal line segments */
+            if (dqx != 0)
+            {
+                s = ( ( p.x - q.x) + dpx * t ) / dqx;
+            }
+            else
+            {
+                s = ( ( p.y - q.y) + dpy * t) / dqy;
+            }
+
+            if (s > 0 && s < 1)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+
+        }
+        else
+        {
+            return false;
+        }
     }
 
     /**
@@ -190,35 +199,38 @@ public class Polygon extends Shape
 
     public boolean isOverlapping(Circle c)
     {
-    	/* First checks if center is in the polygon */
-    	if (isInside(c.getCenterPoint().x, c.getCenterPoint().y))
-    		return true;
-    	
-    	/* Then check if circle is just outside the bounding box */
-    	float boundLeft = c.getCenterPoint().x - c.getRadius();
-    	float boundRight = c.getCenterPoint().x + c.getRadius();
-    	float boundNorth = c.getCenterPoint().y - c.getRadius();
-    	float boundSouth = c.getCenterPoint().y + c.getRadius();
-    	
-    	/* Check if circle is even close enough */
-    	if (boundRight < this.bbox.getMinX() || boundLeft > this.bbox.getMaxX())
-    		return false;
-    	if (boundSouth < this.bbox.getMinY() || boundNorth > this.bbox.getMaxY())
-    		return false;
-    	
+        /* First checks if center is in the polygon */
+        if (isInside(c.getCenterPoint().x, c.getCenterPoint().y))
+            return true;
+
+        /* Then check if circle is just outside the bounding box */
+        float boundLeft = c.getCenterPoint().x - c.getRadius();
+        float boundRight = c.getCenterPoint().x + c.getRadius();
+        float boundNorth = c.getCenterPoint().y - c.getRadius();
+        float boundSouth = c.getCenterPoint().y + c.getRadius();
+
+        /* Check if circle is even close enough */
+        if (boundRight < this.bbox.getMinX() || boundLeft > this.bbox.getMaxX())
+            return false;
+        if (boundSouth < this.bbox.getMinY() || boundNorth > this.bbox.getMaxY())
+            return false;
+
         /* Finds the closest point on line segment for each circle, then checks if it is in radius */
-    	boolean overlap;
-    	int size = vertices.size();
-    	for (int ii = 0 ; ii < size ; ii++ )
-    	{
-    		overlap = circleTouching(vertices.get(ii), vertices.get( (ii + 1) % size), c.getCenterPoint(), c.getRadius());
-    		if (overlap)
-    			return true;
-    	}
+        boolean overlap;
+        int size = vertices.size();
+        for (int ii = 0 ; ii < size ; ii++ )
+        {
+            overlap = circleTouching(vertices.get(ii), vertices.get( (ii + 1) % size), c.getCenterPoint(), c.getRadius());
+            if (overlap)
+                return true;
+        }
         return false;
     }
 
     /**
+     * The concavity test only checks the OUTER boundary and makes no assumptions about the
+     * holes...
+     *
      * Returns {@code true} if and only if this polygon is concave.
      *
      * @return {@code true} if and only if this polygon is concave.
@@ -231,7 +243,7 @@ public class Polygon extends Shape
          */
         Point p1, p2, p3;
         float zCross;
-        boolean clockwise = isClockwise();
+        boolean clockwise = isClockwise(this.vertices);
         int size = vertices.size();
 
         if (size < 3)
@@ -294,93 +306,221 @@ public class Polygon extends Shape
      */
     public boolean isInside(final float x, final float y)
     {
-    	if (this.vertices.size() == 0)
-    		return false;
-    	
+        if (this.vertices.size() == 0)
+            return false;
+
         /* First detect if point is even in the bounding box */
         if (x > this.bbox.getMaxX() || x < this.bbox.getMinX() ||
                 y > this.bbox.getMaxY() || y < this.bbox.getMinY())
             return false;
-        
-        boolean isCC = isClockwise();
-        Point thePoint = new Point(x,y);
-        
+
+        boolean isClock = isClockwise(this.vertices);
+        Point thePoint = new Point(x, y);
+
         /* Check if the point is one of the vertices */
         for (Point p : this.vertices)
         {
-        	if (p.x == thePoint.x && p.y == thePoint.y)
-        		return true;
+            if (p.x == thePoint.x && p.y == thePoint.y)
+                return true;
         }
 
         /* Next pick a point outside the polygon and verify the ray from the out point to this
          * point does not cross any vertices, otherwise select a new line
          */
         Random rand = new Random();
-        Point outer = new Point(rand.nextFloat() + 10 + this.bbox.getMaxX() , 
-        		rand.nextFloat() + 10 + this.bbox.getMaxY());
+        Point outer = new Point(rand.nextFloat() + 10 + this.bbox.getMaxX() ,
+                                rand.nextFloat() + 10 + this.bbox.getMaxY());
         boolean notValid = true;
         /* Use a dot product to check if it goes through a vertex */
         while (notValid)
         {
-        	/* Get a new point */
-        	outer.x = rand.nextFloat() + 10 + this.bbox.getMaxX();
-        	outer.y = rand.nextFloat() + 20 + this.bbox.getMaxY();
-        	
-        	/* Set up the two vectors */
-        	float rayX = outer.x - thePoint.x;
-        	float rayY = outer.y - thePoint.y;
-        	float testX, testY, intersectTest;
-        	
-        	for (Point p : this.vertices)
-        	{
-        		/* Check if any vertex lies on line from point */
-        		testX = p.x - thePoint.x;
-        		testY = p.y - thePoint.y;
-        		float magRay = (float) Math.sqrt( Math.pow((double)rayX, 2) + Math.pow((double)rayY, 2));
-        		float magTest = (float) Math.sqrt( Math.pow((double)testX, 2) + Math.pow((double)testY, 2));
+            /* Get a new point (Multiply the next float by 10 so we get some range, I had problems with this) */
+            outer.x = 10 * rand.nextFloat() + 10 + this.bbox.getMaxX();
+            outer.y = 10 * rand.nextFloat() + -20 + this.bbox.getMaxY();
 
-        		//System.out.println("The mag multiply for " + p.toString() + " is " + magTest * magRay);
-				intersectTest = Math.abs(1 - (Math.abs(rayX * testX + rayY
-							* testY)));// / (magRay * magTest)));
+            /* Set up the two vectors */
+            float rayX = outer.x - thePoint.x;
+            float rayY = outer.y - thePoint.y;
+            float unitX, unitY, testX, testY, intersectTest;
 
-				if (intersectTest <= 1e-005)
-        		{
-        			/* This is on the line */
-        			notValid = true;
-        			break;
-        		}
-        		/* No vertex was on line, we have a good point */
-        		notValid = false;
-        	}
+            float magRay = (float) Math.sqrt( Math.pow((double)rayX, 2) + Math.pow((double)rayY, 2));
+            unitX = rayX / magRay;
+            unitY = rayY / magRay;
+            notValid = false;
+            for (Point p : this.vertices)
+            {
+                /* Check if any vertex lies on line from point */
+                testX = p.x - thePoint.x;
+                testY = p.y - thePoint.y;
+                float magTest = (float) Math.sqrt( Math.pow((double)testX, 2) + Math.pow((double)testY, 2));
+
+                /* The unit vectors for the computation */
+                testX /= magTest;
+                testY /= magTest;
+
+                intersectTest = Math.abs(1 - (Math.abs(unitX * testX + unitY * testY)));// / (magRay * magTest)));
+
+                if (intersectTest <= 1e-005)
+                {
+                    /* This is on the line */
+                    notValid = true;
+                    break;
+                }
+                /* No vertex was on line, we have a good point */
+                notValid = false;
+            }
+
+            /* Now do the same check for all of the holes as well */
+            for (ArrayList<Point> hole : this.holes)
+            {
+                for (Point p : hole)
+                {
+                    /* Check if any vertex lies on line from point */
+                    testX = p.x - thePoint.x;
+                    testY = p.y - thePoint.y;
+                    float magTest = (float) Math.sqrt( Math.pow((double)testX, 2) + Math.pow((double)testY, 2));
+
+                    /* The unit vectors for the computation */
+                    testX /= magTest;
+                    testY /= magTest;
+
+                    intersectTest = Math.abs(1 - (Math.abs(unitX * testX + unitY * testY)));// / (magRay * magTest)));
+
+                    if (intersectTest <= 1e-005)
+                    {
+                        /* This is on the line */
+                        notValid = true;
+                        break;
+                    }
+                    /* No vertex was on line, we have a good point */
+                    notValid = false;
+                }
+
+                if (notValid)
+                    break; /* Break out to restart the loop */
+            }
         }
-        
+
         /* Now, use winding rule on the ray */
         int count = 0;
         int size = this.vertices.size();
         boolean intersect = false;
         for (int ii = 0 ; ii < size ; ii++)
         {
-        	float dqx = vertices.get((ii + 1) % size).x - vertices.get(ii).x;
-        	float dqy = vertices.get((ii + 1) % size).y - vertices.get(ii).y;
-        	intersect = segmentIntersect(thePoint, outer.x-thePoint.x, outer.y-thePoint.y, 
-        			vertices.get(ii), dqx, dqy);
-        	if (intersect)
-        	{
-        		/* Detect if it is clockwise or counterclockwise */
-        		float zDot = (outer.x - thePoint.x) * (dqy) - (outer.y - thePoint.y) * dqx;
-        		if (zDot < 0)
-        			count++;
-        		else
-        			count--;
-        	}
+            float dqx = vertices.get((ii + 1) % size).x - vertices.get(ii).x;
+            float dqy = vertices.get((ii + 1) % size).y - vertices.get(ii).y;
+            intersect = segmentIntersect(thePoint, outer.x - thePoint.x, outer.y - thePoint.y,
+                                         vertices.get(ii), dqx, dqy);
+            if (intersect)
+            {
+                /* Detect if it is clockwise or counterclockwise */
+                float zDot = (outer.x - thePoint.x) * (dqy) - (outer.y - thePoint.y) * dqx;
+                if (zDot < 0)
+                    count++;
+                else
+                    count--;
+            }
         }
-        
+
+        // /* Now on each of the polygonal holes, I have separate cases based on the orientation of the polygon, and the  */
+        // for (ArrayList<Point> hole : this.holes)
+        // {
+        //     size = hole.size();
+        //     if (isClock)
+        //     {
+        //         /* Inner polygons should be counterclockwise then */
+        //         if (isClockwise(hole))
+        //         {
+        //             /* Travel in reverse */
+        //             for (int ii = size-1 ; ii >= 0 ; ii--)
+        //             {
+        //                 float dqx = vertices.get(Math.abs((ii - 1) % size)).x - vertices.get(ii).x;
+        //                 float dqy = vertices.get(Math.abs((ii - 1) % size)).y - vertices.get(ii).y;
+        //                 intersect = segmentIntersect(thePoint, outer.x - thePoint.x, outer.y - thePoint.y,
+        //                                              vertices.get(ii), dqx, dqy);
+        //                 if (intersect)
+        //                 {
+        //                     /* Detect if it is clockwise or counterclockwise */
+        //                     float zDot = (outer.x - thePoint.x) * (dqy) - (outer.y - thePoint.y) * dqx;
+        //                     if (zDot < 0)
+        //                         count++;
+        //                     else
+        //                         count--;
+        //                 }
+        //             }
+        //         }
+        //         else
+        //         {
+        //             /* Check normally*/
+        //             for (int ii = 0 ; ii < size ; ii++)
+        //             {
+        //                 float dqx = vertices.get((ii + 1) % size).x - vertices.get(ii).x;
+        //                 float dqy = vertices.get((ii + 1) % size).y - vertices.get(ii).y;
+        //                 intersect = segmentIntersect(thePoint, outer.x - thePoint.x, outer.y - thePoint.y,
+        //                                              vertices.get(ii), dqx, dqy);
+        //                 if (intersect)
+        //                 {
+        //                     /* Detect if it is clockwise or counterclockwise */
+        //                     float zDot = (outer.x - thePoint.x) * (dqy) - (outer.y - thePoint.y) * dqx;
+        //                     if (zDot < 0)
+        //                         count++;
+        //                     else
+        //                         count--;
+        //                 }
+        //             }
+        //         }
+        //     }
+        //     else 
+        //     {
+        //         if ( !isClockwise(hole) )
+        //         {
+        //             /* Travel in reverse */
+        //             for (int ii = size-1 ; ii >= 0 ; ii--)
+        //             {
+        //                 float dqx = vertices.get(Math.abs((ii - 1) % size)).x - vertices.get(ii).x;
+        //                 float dqy = vertices.get(Math.abs((ii - 1) % size)).y - vertices.get(ii).y;
+        //                 intersect = segmentIntersect(thePoint, outer.x - thePoint.x, outer.y - thePoint.y,
+        //                                              vertices.get(ii), dqx, dqy);
+        //                 if (intersect)
+        //                 {
+        //                     /* Detect if it is clockwise or counterclockwise */
+        //                     float zDot = (outer.x - thePoint.x) * (dqy) - (outer.y - thePoint.y) * dqx;
+        //                     if (zDot < 0)
+        //                         count++;
+        //                     else
+        //                         count--;
+        //                 }
+        //             }
+        //         }
+        //         else
+        //         {
+        //             /* Check normally*/
+        //             for (int ii = 0 ; ii < size ; ii++)
+        //             {
+        //                 float dqx = vertices.get((ii + 1) % size).x - vertices.get(ii).x;
+        //                 float dqy = vertices.get((ii + 1) % size).y - vertices.get(ii).y;
+        //                 intersect = segmentIntersect(thePoint, outer.x - thePoint.x, outer.y - thePoint.y,
+        //                                              vertices.get(ii), dqx, dqy);
+        //                 if (intersect)
+        //                 {
+        //                     /* Detect if it is clockwise or counterclockwise */
+        //                     float zDot = (outer.x - thePoint.x) * (dqy) - (outer.y - thePoint.y) * dqx;
+        //                     if (zDot < 0)
+        //                         count++;
+        //                     else
+        //                         count--;
+        //                 }
+        //             }
+        //         }
+        //     }     
+        // }
+
         if (count != 0)
         {
-        	return true;
+            return true;
         }
         else
-        	return false;
+            return false;
     }
 
     /**
@@ -396,14 +536,6 @@ public class Polygon extends Shape
         boolean intersect = false;;
         Point p1, p2, q1, q2; /* Start and end points of line segments */
 
-        float p; /* The starting point */
-        float dpx; /* X slope of p */
-        float dpy; /* Y slope of p */
-
-        float q;
-        float dqx;
-        float dqy;
-
         for (int ii = 0 ; ii < size ; ii++)
         {
             for (int jj = ii + 1 ; jj < size ; jj++)
@@ -412,10 +544,10 @@ public class Polygon extends Shape
                 p1 = this.vertices.get(ii);
                 p2 = this.vertices.get( (ii + 1) % size); /* Mod takes into account the edge case */
                 q1 = this.vertices.get(jj);
-                q2 = this.vertices.get( (jj + 1) % size); 
+                q2 = this.vertices.get( (jj + 1) % size);
                 intersect = segmentIntersect(p1, p2.x - p1.x, p2.y - p1.y, q1, q2.x - q1.x, q2.y - q1.y);
                 if (intersect)
-                	return true;
+                    return true;
             }
         }
         return false;
@@ -424,6 +556,55 @@ public class Polygon extends Shape
     ////////////////////////////////////////////////////////////////
     //  IMPLEMENT THE FUNCTIONS ABOVE                     //////////
     ////////////////////////////////////////////////////////////////
+
+    /** HOLE FUNCTIONS */
+
+    /**
+     * Adds a hole to the current polygon. Increments the hole index if not zero
+     */
+    public void addHole()
+    {
+        this.holeIndex++;
+        holes.add(new ArrayList<Point>());
+    }
+
+    /**
+     * Add a vertex for the current hole
+     *
+     * @param x
+     *          The x value of the vertex
+     * @param y
+     *          The y value of the vertex
+     */
+    public void addHoleVert(final int x, final int y)
+    {
+        ArrayList<Point> holeVerts = this.holes.get(holeIndex);
+        holeVerts.add(new Point(x, y));
+    }
+
+    /**
+     * Adds a circle hole to the polygon at the specified point
+     */
+    public void addCircleHole(final int x, final int y)
+    {
+
+    }
+
+    /**
+     * Verify hole by ensuring there are at least 3 points, otherwise remove it
+     */
+    public void verifyHole()
+    {
+    	if (holes.size() == 0)
+    		return;
+        ArrayList<Point> theHole = holes.get(holeIndex);
+        if (theHole.size() < 3)
+        {
+            /* Delete the hole, reduce the index */
+            holes.remove(holeIndex);
+            this.holeIndex--;
+        }
+    }
 
     /**
      * Add a vertex to this polygon at the point specified by the given x and y
@@ -458,7 +639,7 @@ public class Polygon extends Shape
             this.selectedVertex.x = x;
             this.selectedVertex.y = y;
         }
-        setBbox(); /* Set bbox whenver vertec changed */
+        setBbox(); /* Set bbox whenver vertex changed */
     }
 
     /**
@@ -530,6 +711,12 @@ public class Polygon extends Shape
         return this.vertices;
     }
 
+    /* Returns the holes */
+    ArrayList<ArrayList<Point>> holes()
+    {
+        return this.holes;
+    }
+
     public BoundingBox2D getBbox()
     {
         return bbox;
@@ -562,6 +749,11 @@ public class Polygon extends Shape
                 maxY = this.vertices.get(i).y;
         }
         this.bbox.set(minX, minY, maxX, maxY);
+    }
+
+    public ArrayList<Point> getVertices()
+    {
+        return this.vertices;
     }
 
 }

@@ -9,6 +9,8 @@
  */
 
 
+import java.util.*;
+
 import javax.media.opengl.GL;
 import javax.media.opengl.GL2;
 import javax.media.opengl.GLAutoDrawable;
@@ -57,7 +59,7 @@ public static void draw(final GLAutoDrawable drawable, final Polygon polygon, fi
 
 /**
  * Draws the specified concave polygon with the specified OpenGL drawable
- * object.
+ * object.  ALL DRAWING GOES THROUGH HERE NOW.
  * 
  * Pre-condition: the specified polygon is concave.
  * 
@@ -68,10 +70,6 @@ public static void draw(final GLAutoDrawable drawable, final Polygon polygon, fi
  */
 private static void drawConcave(final GLAutoDrawable drawable,
     final Polygon polygon, final Color color) {
-	/*
-	 * The next line is only here until you implement your own algorithm for drawing
-	 * a concave polygon. Comment out this line once you have implemented it!
-	 */
 	// drawConvex(drawable,polygon,color);  
 	/*
 	 * Your code for drawing a concave polygon, using the openGL stencil buffer should go here.
@@ -105,6 +103,27 @@ private static void drawConcave(final GLAutoDrawable drawable,
 
 	gl.glEnd();
 	
+	/* Now draw each indidual hole */
+	for (ArrayList<Point> hole : polygon.holes())
+	{
+		// if only 1 vertex, draw a point
+		if (hole.size() == 1)
+			gl.glBegin(GL.GL_POINTS);
+
+		// if only 2 vertices, draw a line
+		else if (hole.size() == 2)
+			gl.glBegin(GL.GL_LINES);
+
+		// otherwise draw a polygon
+		else
+			gl.glBegin(GL2.GL_TRIANGLE_FAN); /* For best performance here */
+
+		for (final Point vertex : hole)
+			gl.glVertex2f(vertex.x, vertex.y);
+
+		gl.glEnd();
+	}
+	
 	/* Re-enable color */
 	gl.glColorMask(true, true, true, true);
 	gl.glStencilFunc(GL.GL_EQUAL, 1, 1);
@@ -132,6 +151,27 @@ private static void drawConcave(final GLAutoDrawable drawable,
 		gl.glVertex2f(vertex.x, vertex.y);
 
 	gl.glEnd();
+	
+	/* Now draw each indidual hole */
+	for (ArrayList<Point> hole : polygon.holes())
+	{
+		// if only 1 vertex, draw a point
+		if (hole.size() == 1)
+			gl.glBegin(GL.GL_POINTS);
+
+		// if only 2 vertices, draw a line
+		else if (hole.size() == 2)
+			gl.glBegin(GL.GL_LINES);
+
+		// otherwise draw a polygon
+		else
+			gl.glBegin(GL2.GL_TRIANGLE_FAN); /* For best performance here */
+
+		for (final Point vertex : hole)
+			gl.glVertex2f(vertex.x, vertex.y);
+
+		gl.glEnd();
+	}
 
 	// pop current color
 	gl.glPopAttrib();

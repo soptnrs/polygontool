@@ -161,7 +161,6 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
    */
   public void display(final GLAutoDrawable drawable) {
     final GL2 gl = (GL2) drawable.getGL();
-//    gl.glEnable(GL.GL_STENCIL_TEST);
     
     // check if we need to fill the polygon
     if (this.fill)
@@ -225,7 +224,7 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
     				"The polygon does NOT have self-intersection", GLUT.BITMAP_HELVETICA_18);
         
         /* Display the result of Clockwise TEST */
-        if (!((Polygon)this.shapes[0]).isClockwise())
+        if (!((Polygon)this.shapes[0]).isClockwise(((Polygon)this.shapes[0]).getVertices()))
         	drawString(drawable, this.canvas.getWidth()-60, this.canvas.getHeight() - 80,
     				"CW", GLUT.BITMAP_HELVETICA_18);
         else
@@ -340,6 +339,15 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
    *          {@inheritDoc}
    */
   public void keyTyped(final KeyEvent key) {
+	  
+	  /* If previously in hole mode, and a key was pressed, check to make sure the last whole
+	   * had at least three points, otherwise, delete it 
+	   */
+	  if (this.mode == HOLE_MODE)
+	  {
+		  ((Polygon)this.shapes[0]).verifyHole();
+	  }
+	  
     switch (key.getKeyChar()) {
     
     case 'T':
@@ -385,7 +393,8 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
     case 'H':
     case 'h':
     	this.mode = HOLE_MODE;
-
+    	((Polygon)this.shapes[0]).addHole();
+    	
     default:
       break;
     }
@@ -506,6 +515,10 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
             this.insideOutsideMessage = "Point is OUTSIDE the polygon";
     	break;
     case HOLE_MODE:
+    	if (button == MouseEvent.BUTTON1)
+    		((Polygon)this.shapes[0]).addHoleVert(mouse.getX(), mouse.getY());
+    	
+    	/* For holes, no behavior for button3 */
     	
     default:
     	break;
