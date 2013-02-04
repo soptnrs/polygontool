@@ -66,6 +66,9 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
   private static final int POLY_MODE=0;
   private static final int CIRC_MODE=1;
   private static final int INSI_MODE=2;
+  /** Added in hole mode */
+  private static final int HOLE_MODE=3;
+  private static final int CIRCLE_HOLE_MODE=4;
 
   /**
    * Initializes the window and OpenGL components, then runs the animator.
@@ -168,13 +171,13 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
 
     // clear the display
     gl.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_STENCIL_BUFFER_BIT);
-
+    
     // check if we need to highlight pixels which are inside the polygon
     if (this.insideOutsideTest) {
       // push the current color
       gl.glPushAttrib(GL2.GL_CURRENT_BIT);
       gl.glPointSize(3);
-      gl.glBegin(GL.GL_POINTS);
+      gl.glBegin(GL.GL_POINTS);   
       for (int y = 0; y < this.canvas.getHeight(); y++) {
         for (int x = 0; x < this.canvas.getWidth(); x++) {
           if (this.shapes[selectedShapeIndex].isInside(x, y))
@@ -192,7 +195,7 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
     }
 
     // render the polygon and the circle
-    Drawer.draw(drawable, (Polygon)this.shapes[0], (Circle)this.shapes[1], false);    
+    Drawer.draw(drawable, (Polygon)this.shapes[0], (Circle)this.shapes[1], false);   
 
     gl.glPopAttrib(); // pop attributes to restore
     
@@ -220,6 +223,14 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
         else
         	drawString(drawable, 20, this.canvas.getHeight() - 40,
     				"The polygon does NOT have self-intersection", GLUT.BITMAP_HELVETICA_18);
+        
+        /* Display the result of Clockwise TEST */
+        if (!((Polygon)this.shapes[0]).isCounterClockwise(((Polygon)this.shapes[0]).getVertices()))
+        	drawString(drawable, this.canvas.getWidth()-60, this.canvas.getHeight() - 80,
+    				"CW", GLUT.BITMAP_HELVETICA_18);
+        else
+        	drawString(drawable, this.canvas.getWidth()-60, this.canvas.getHeight() - 80,
+    				"CCW", GLUT.BITMAP_HELVETICA_18);
     }
     
     
@@ -329,10 +340,20 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
    *          {@inheritDoc}
    */
   public void keyTyped(final KeyEvent key) {
+	  
+	  /* If previously in hole mode, and a key was pressed, check to make sure the last whole
+	   * had at least three points, otherwise, delete it 
+	   */
+	  if (this.mode == HOLE_MODE)
+	  {
+		  ((Polygon)this.shapes[0]).verifyHole();
+	  }
+	  
     switch (key.getKeyChar()) {
     
     case 'T':
     case 't':
+    	((Polygon)this.shapes[0]).resetHole();
       this.shapes = this.testCases.next();
       break;
 
@@ -371,7 +392,15 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
     case 'i':
       this.mode = INSI_MODE;
       
-
+    case 'H':
+    case 'h':
+    	this.mode = HOLE_MODE;
+    	((Polygon)this.shapes[0]).addHole();
+    	break;
+    case 'J':
+    case 'j':
+    	this.mode = CIRCLE_HOLE_MODE;  	
+    	break;
     default:
       break;
     }
@@ -491,6 +520,19 @@ public class PA1 extends JFrame implements GLEventListener, KeyListener,
         else
             this.insideOutsideMessage = "Point is OUTSIDE the polygon";
     	break;
+    case HOLE_MODE:
+    	if (button == MouseEvent.BUTTON1)
+    		((Polygon)this.shapes[0]).addHoleVert(mouse.getX(), mouse.getY());
+    	break;
+    	
+    	/* For holes, no behavior for button3 */
+    case CIRCLE_HOLE_MODE:
+    	if (button == MouseEvent.BUTTON1)
+    		((Polygon)this.shapes[0]).addCircleHole(mouse.getX(), mouse.getY());
+    	else
+    		((Polygon)this.shapes[0]).adjustCircleHoleRadius(mouse.getX(), mouse.getY());
+    	break;
+    	
     default:
     	break;
     }
