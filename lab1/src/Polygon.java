@@ -22,7 +22,9 @@ import java.util.Random;
  * hole will never have vertices outside the polygon boundary.  I assume that there will be
  * no holes within holes for the polygon.  And I enforce the condition that once you create
  * a new hole, you can no longer edit any previous holes. I also assume that you can only move
- * boundary vertices, since it is in a separate mode
+ * boundary vertices, since it is in a separate mode.  The way it is coded however, means that
+ * holes with vertices outside the boundary may render properly still, but it was not coded
+ * with this in mind.
  *
  * @author Stan Sclaroff <sclaroff>
  * @author Tai-Peng Tian <tiantp@gmail.com>
@@ -43,8 +45,11 @@ public class Polygon extends Shape
     private float TOL = 0.0005f;
     /** An list of lists of vertices for holes */
     private final ArrayList<ArrayList<Point>> holes = new ArrayList<ArrayList<Point>>();
+    /** A list of circles for holes */
+    private final ArrayList<Circle> circleHoles = new ArrayList<Circle>();
     /** Current index into the hole array */
     private int holeIndex = -1;
+    private int circleIndex = -1;
 
     public Polygon()
     {
@@ -114,7 +119,7 @@ public class Polygon extends Shape
      *
      * @return {@code true} if and only if polygon vertices are counterclockwise
      */
-    public boolean isClockwise(ArrayList<Point> theVertices)
+    public boolean isCounterClockwise(ArrayList<Point> theVertices)
     {
         /* This test uses a simplified version of green's theorem to get the signed area
          * if the result is positive, curve is clockwise, else it is counter clockwise, I got the idea from:
@@ -172,7 +177,7 @@ public class Polygon extends Shape
                 s = ( ( p.y - q.y) + dpy * t) / dqy;
             }
 
-            if (s > 0 && s < 1)
+            if (s > 0   && s < 1)
             {
                 return true;
             }
@@ -216,6 +221,7 @@ public class Polygon extends Shape
             return false;
 
         /* Finds the closest point on line segment for each circle, then checks if it is in radius */
+        /* Performs this for all of the holes as well, and the circles as well */
         boolean overlap;
         int size = vertices.size();
         for (int ii = 0 ; ii < size ; ii++ )
@@ -224,6 +230,39 @@ public class Polygon extends Shape
             if (overlap)
                 return true;
         }
+        
+        for (ArrayList<Point> hole : this.holes)
+        {
+        	size = hole.size();
+        	for (int ii = 0 ; ii < size ; ii++ )
+            {
+                overlap = circleTouching(hole.get(ii), hole.get( (ii + 1) % size), c.getCenterPoint(), c.getRadius());
+                if (overlap)
+                    return true;
+            }
+        }
+        
+        /* At this point the last check is circles, for each circle, see if the magnitude
+         * of the distance between the centers is less than the sum of the radii
+         */
+        float magnitude;
+        float leeWay;
+        for (Circle circle : this.circleHoles)
+        {
+        	magnitude = (float) Math.sqrt( Math.pow( (double) ( c.getCenterPoint().x - circle.getCenterPoint().x ) , (double) 2.0 ) + 
+        			Math.pow( (double) ( c.getCenterPoint().y - circle.getCenterPoint().y ) , (double) 2.0 ) );
+        	if (magnitude < (circle.getRadius() + c.getRadius()))
+        	{
+        		/* Circle is close enough to the hole to be worth checking */
+	        	leeWay = circle.getRadius() - c.getRadius();
+	        	if (leeWay < 1e-005)
+	        		return true; /* Circle is bigger than the hole */
+	        	
+	        	if (magnitude > (leeWay - 1e-005))
+	        		return true; /* The circle is touching or past the edge */
+        	}
+        }
+        
         return false;
     }
 
@@ -243,7 +282,7 @@ public class Polygon extends Shape
          */
         Point p1, p2, p3;
         float zCross;
-        boolean clockwise = isClockwise(this.vertices);
+        boolean clockwise = isCounterClockwise(this.vertices);
         int size = vertices.size();
 
         if (size < 3)
@@ -314,7 +353,7 @@ public class Polygon extends Shape
                 y > this.bbox.getMaxY() || y < this.bbox.getMinY())
             return false;
 
-        boolean isClock = isClockwise(this.vertices);
+        boolean isCC = isCounterClockwise(this.vertices);
         Point thePoint = new Point(x, y);
 
         /* Check if the point is one of the vertices */
@@ -404,116 +443,136 @@ public class Polygon extends Shape
         /* Now, use winding rule on the ray */
         int count = 0;
         int size = this.vertices.size();
+        float pointRayX = outer.x - thePoint.x;
+        float pointRayY = outer.y - thePoint.y;
+        float dqx, dqy, zCross;
         boolean intersect = false;
         for (int ii = 0 ; ii < size ; ii++)
         {
-            float dqx = vertices.get((ii + 1) % size).x - vertices.get(ii).x;
-            float dqy = vertices.get((ii + 1) % size).y - vertices.get(ii).y;
-            intersect = segmentIntersect(thePoint, outer.x - thePoint.x, outer.y - thePoint.y,
+            dqx = vertices.get((ii + 1) % size).x - vertices.get(ii).x;
+            dqy = vertices.get((ii + 1) % size).y - vertices.get(ii).y;
+            intersect = segmentIntersect(thePoint, pointRayX, pointRayY,
                                          vertices.get(ii), dqx, dqy);
             if (intersect)
             {
                 /* Detect if it is clockwise or counterclockwise */
-                float zDot = (outer.x - thePoint.x) * (dqy) - (outer.y - thePoint.y) * dqx;
-                if (zDot < 0)
+                zCross = (pointRayX) * (dqy) - (pointRayY) * dqx;
+                if (zCross < 0)
                     count++;
                 else
                     count--;
             }
         }
 
-        // /* Now on each of the polygonal holes, I have separate cases based on the orientation of the polygon, and the  */
-        // for (ArrayList<Point> hole : this.holes)
-        // {
-        //     size = hole.size();
-        //     if (isClock)
-        //     {
-        //         /* Inner polygons should be counterclockwise then */
-        //         if (isClockwise(hole))
-        //         {
-        //             /* Travel in reverse */
-        //             for (int ii = size-1 ; ii >= 0 ; ii--)
-        //             {
-        //                 float dqx = vertices.get(Math.abs((ii - 1) % size)).x - vertices.get(ii).x;
-        //                 float dqy = vertices.get(Math.abs((ii - 1) % size)).y - vertices.get(ii).y;
-        //                 intersect = segmentIntersect(thePoint, outer.x - thePoint.x, outer.y - thePoint.y,
-        //                                              vertices.get(ii), dqx, dqy);
-        //                 if (intersect)
-        //                 {
-        //                     /* Detect if it is clockwise or counterclockwise */
-        //                     float zDot = (outer.x - thePoint.x) * (dqy) - (outer.y - thePoint.y) * dqx;
-        //                     if (zDot < 0)
-        //                         count++;
-        //                     else
-        //                         count--;
-        //                 }
-        //             }
-        //         }
-        //         else
-        //         {
-        //             /* Check normally*/
-        //             for (int ii = 0 ; ii < size ; ii++)
-        //             {
-        //                 float dqx = vertices.get((ii + 1) % size).x - vertices.get(ii).x;
-        //                 float dqy = vertices.get((ii + 1) % size).y - vertices.get(ii).y;
-        //                 intersect = segmentIntersect(thePoint, outer.x - thePoint.x, outer.y - thePoint.y,
-        //                                              vertices.get(ii), dqx, dqy);
-        //                 if (intersect)
-        //                 {
-        //                     /* Detect if it is clockwise or counterclockwise */
-        //                     float zDot = (outer.x - thePoint.x) * (dqy) - (outer.y - thePoint.y) * dqx;
-        //                     if (zDot < 0)
-        //                         count++;
-        //                     else
-        //                         count--;
-        //                 }
-        //             }
-        //         }
-        //     }
-        //     else 
-        //     {
-        //         if ( !isClockwise(hole) )
-        //         {
-        //             /* Travel in reverse */
-        //             for (int ii = size-1 ; ii >= 0 ; ii--)
-        //             {
-        //                 float dqx = vertices.get(Math.abs((ii - 1) % size)).x - vertices.get(ii).x;
-        //                 float dqy = vertices.get(Math.abs((ii - 1) % size)).y - vertices.get(ii).y;
-        //                 intersect = segmentIntersect(thePoint, outer.x - thePoint.x, outer.y - thePoint.y,
-        //                                              vertices.get(ii), dqx, dqy);
-        //                 if (intersect)
-        //                 {
-        //                     /* Detect if it is clockwise or counterclockwise */
-        //                     float zDot = (outer.x - thePoint.x) * (dqy) - (outer.y - thePoint.y) * dqx;
-        //                     if (zDot < 0)
-        //                         count++;
-        //                     else
-        //                         count--;
-        //                 }
-        //             }
-        //         }
-        //         else
-        //         {
-        //             /* Check normally*/
-        //             for (int ii = 0 ; ii < size ; ii++)
-        //             {
-        //                 float dqx = vertices.get((ii + 1) % size).x - vertices.get(ii).x;
-        //                 float dqy = vertices.get((ii + 1) % size).y - vertices.get(ii).y;
-        //                 intersect = segmentIntersect(thePoint, outer.x - thePoint.x, outer.y - thePoint.y,
-        //                                              vertices.get(ii), dqx, dqy);
-        //                 if (intersect)
-        //                 {
-        //                     /* Detect if it is clockwise or counterclockwise */
-        //                     float zDot = (outer.x - thePoint.x) * (dqy) - (outer.y - thePoint.y) * dqx;
-        //                     if (zDot < 0)
-        //                         count++;
-        //                     else
-        //                         count--;
-        //                 }
-        //             }
-        //         }
-        //     }     
-        // }
+        /* Now on each of the polygonal holes, I have separate cases based on the rotation of the polygon, and the  */
+        for (ArrayList<Point> hole : this.holes)
+        {
+            size = hole.size();
+            if (isCC)
+            {
+                /* Inner polygons should be clockwise then */
+                if (isCounterClockwise(hole))
+                {
+                    /* Travel in reverse */
+                    for (int ii = size ; ii > 0 ; ii--)
+                    {
+                        dqx = hole.get(ii - 1).x - hole.get( (ii) % size ).x;
+                        dqy = hole.get(ii - 1).y - hole.get( (ii) % size ).y;
+                        intersect = segmentIntersect(thePoint, pointRayX, pointRayY,
+                                                     hole.get(ii % size), dqx, dqy);
+                        if (intersect)
+                        {
+                            /* Detect if it is clockwise or counterclockwise */
+                            zCross = (pointRayX) * (dqy) - (pointRayY) * dqx;
+                            if (zCross < 0)
+                                count++;
+                            else
+                                count--;
+                        }
+                    }
+                }
+                else
+                {
+                    /* Check normally*/
+                    for (int ii = 0 ; ii < size ; ii++)
+                    {
+                        dqx = hole.get((ii + 1) % size).x - hole.get(ii).x;
+                        dqy = hole.get((ii + 1) % size).y - hole.get(ii).y;
+                        intersect = segmentIntersect(thePoint, pointRayX, pointRayY,
+                                                     hole.get(ii), dqx, dqy);
+                        if (intersect)
+                        {
+                            /* Detect if it is clockwise or counterclockwise */
+                            zCross = (pointRayX) * (dqy) - (pointRayY) * dqx;
+                            if (zCross < 0)
+                                count++;
+                            else
+                                count--;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                if ( !isCounterClockwise(hole) )
+                {
+                    /* Travel in reverse */
+                    for (int ii = size ; ii > 0 ; ii--)
+                    {
+                        dqx = hole.get(ii - 1).x - hole.get( (ii) % size ).x;
+                        dqy = hole.get(ii - 1).y - hole.get( (ii) % size ).y;
+                        intersect = segmentIntersect(thePoint, pointRayX, pointRayY,
+                                                     hole.get(ii % size), dqx, dqy);
+                        if (intersect)
+                        {
+                            /* Detect if it is clockwise or counterclockwise */
+                            zCross = (pointRayX) * (dqy) - (pointRayY) * dqx;
+                            if (zCross < 0)
+                                count++;
+                            else
+                                count--;
+                        }
+                    }
+                }
+                else
+                {
+                    /* Check normally*/
+                    for (int ii = 0 ; ii < size ; ii++)
+                    {
+                        dqx = hole.get((ii + 1) % size).x - hole.get(ii).x;
+                        dqy = hole.get((ii + 1) % size).y - hole.get(ii).y;
+                        intersect = segmentIntersect(thePoint, pointRayX, pointRayY,
+                                                     hole.get(ii), dqx, dqy);
+                        if (intersect)
+                        {
+                            /* Detect if it is clockwise or counterclockwise */
+                            zCross = (pointRayX) * (dqy) - (pointRayY) * dqx;
+                            if (zCross < 0)
+                                count++;
+                            else
+                                count--;
+                        }
+                    }
+                }
+            }
+        }
+        
+        /* Finally, check for the circular holes */
+        float magnitude;
+        for (Circle circle : this.circleHoles)
+        {
+        	magnitude = (float) Math.sqrt( Math.pow( (double) ( thePoint.x - circle.getCenterPoint().x ) , (double) 2.0 ) + 
+        			Math.pow( (double) ( thePoint.y - circle.getCenterPoint().y ) , (double) 2.0 ) );
+        	if (magnitude < (circle.getRadius() - 1e-005))
+        	{
+        		/* Always add 1 or -1, inside circle regardless of direction */
+        		if (isCC)
+        			count--;
+        		else
+        			count++;
+        	}
+        	/* Otherwise, regardless of where, a ray will either miss, or have a net crossing of 0 */
+        }
 
         if (count != 0)
         {
@@ -587,7 +646,21 @@ public class Polygon extends Shape
      */
     public void addCircleHole(final int x, final int y)
     {
-
+    	Circle newCircle = new Circle(this.getColor().getRed(), 
+    			this.getColor().getGreen(),
+    			this.getColor().getBlue());
+    	newCircle.setCenterPoint(x, y);
+    	newCircle.setRadius(25.0f);
+    	this.circleIndex++;
+    	this.circleHoles.add(newCircle);
+    }
+    
+    /**
+     * Adjust current circle hole radius
+     */
+    public void adjustCircleHoleRadius (final float x, final float y) 
+    {
+    	((Circle)this.circleHoles.get(circleIndex)).moveBoundary(x, y);
     }
 
     /**
@@ -595,8 +668,9 @@ public class Polygon extends Shape
      */
     public void verifyHole()
     {
-    	if (holes.size() == 0)
-    		return;
+        if (holes.size() == 0)
+            return;
+
         ArrayList<Point> theHole = holes.get(holeIndex);
         if (theHole.size() < 3)
         {
@@ -604,6 +678,17 @@ public class Polygon extends Shape
             holes.remove(holeIndex);
             this.holeIndex--;
         }
+    }
+
+    /**
+     * Resets the hole vector when a new test case appears
+     */
+    public void resetHole()
+    {
+        this.holes.clear();
+        this.holeIndex = -1;
+        this.circleHoles.clear();
+        this.circleIndex = -1;
     }
 
     /**
@@ -618,7 +703,7 @@ public class Polygon extends Shape
     public void addVert(final int x, final int y)
     {
         this.vertices.add(new Point(x, y));
-        setBbox(); /* Set bbox whenver vertec changed */
+        setBbox(); /* Set bbox whenver vertex changed */
     }
 
 
@@ -650,6 +735,10 @@ public class Polygon extends Shape
     {
         this.selectedVertex = null;
         this.vertices.clear();
+        this.holes.clear();
+        this.circleHoles.clear();
+        this.holeIndex = -1;
+        this.circleIndex = -1;
     }
 
     /**
@@ -716,7 +805,13 @@ public class Polygon extends Shape
     {
         return this.holes;
     }
-
+    
+    /* Return the circles */
+    ArrayList<Circle> circles()
+    {
+    	return this.circleHoles;
+    }
+    
     public BoundingBox2D getBbox()
     {
         return bbox;
